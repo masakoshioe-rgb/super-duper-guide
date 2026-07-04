@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CYBER CUBE EVASION</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            touch-action: none;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background: #0a0a16; /* 深いサイバー空間の黒 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Courier New', Courier, monospace; /* メカニカルなフォント */
+            overflow: hidden;
+            overscroll-behavior-y: contain;
+        }
+        #gameCanvas {
+            background: #0d0d26; /* 近未来的なダークブルー */
+            display: block;
+            box-shadow: 0 0 30px rgba(0, 242, 254, 0.3);
+            width: 100%;
+            max-width: 400px;
+            height: 100%;
+            max-height: 650px;
+            border: 2px solid #00f2fe;
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+        canvas.width = Math.min(window.innerWidth, 400);
+        canvas.height = Math.min(window.innerHeight, 650);
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    let gameState = 'START';
+    let score = 0;
+
+    // プレイヤー（ネオンブルーのコア）
+    const player = {
+        x: 70,
+        y: 200,
+        radius: 12,
+        velocity: 0,
+        gravity: 0.45,
+        jump: -6.8
+    };
+
+    // ターゲット（エナジーキューブ）
+    let target = { x: 0, y: 0, size: 20, angle: 0, active: false };
+    let obstacles = [];
+    let frameCount = 0;
+
+    // Android用バイブレーション
+    function triggerVibrate(pattern) {
+        if ('vibrate' in navigator) {
+            navigator.vibrate(pattern);
+        }
+    }
+
+    function handleAction(e) {
+        e.preventDefault();
+        if (gameState === 'START') {
+            resetGame();
+            gameState = 'PLAY';
+            triggerVibrate(40);
+        } else if (gameState === 'PLAY') {
+            player.velocity = player.jump;
+        } else if (gameState === 'GAMEOVER') {
+            resetGame();
+            gameState = 'PLAY';
+            triggerVibrate(40);
+        }
+    }
+    
+    window.addEventListener('touchstart', handleAction, { passive: false });
+    window.addEventListener('mousedown', handleAction);
+
+    function resetGame() {
+        player.y = canvas.height / 2;
+        player.velocity = 0;
+        obstacles = [];
+        score = 0;
+        frameCount = 0;
+        spawnTarget();
+    }
+
+    function spawnTarget() {
+        target.x = canvas.width + 50;
+        target.y = Math.random() * (canvas.height - 160) + 80;
+        target.active = true;
+    }
+
+    function triggerGameOver() {
+        gameState = 'GAMEOVER';
+        triggerVibrate([200, 100, 200]); // 激しい衝突振動
+    }
+
+    function update() {
+        if (gameState === 'PLAY') {
+            frameCount++;
+
+            player.velocity += player.gravity;
+            player.y += player.velocity;
+
+            // 天井・床ヒット
+            if (player.y - player.radius < 0) {
+                player.y = player.radius;
+                player.velocity = 0;
+            }
+            if (player.y + player.radius > canvas.height) {
+                triggerGameOver();
+            }
+
+            // キューブの移動・回転・判定
+            if (target.active) {
+                target.x -= (3.0 + score * 0.05);
+                target.angle += 0.05;
+
+                let distTarget = Math.hypot(player.x - target.x, player.y - target.y);
+                if (distTarget < player.radius + target.size / 2) {
+                    score += 20; // キューブは高得点
+                    target.active = false;
+                    triggerVibrate(30); // 軽快な回収振動
+                }
+                if (target.x < -30) target.active = false;
+            } else if (frameCount % 80 === 0) {
+                spawnTarget();
+            }
+
+            // 障害物ゲートの生成
+            if (frameCount % 110 === 0) {
+                let gap = 130 - Math.min(score * 0.5, 35);
+                let topHeight = Math.random() * (canvas.height - gap - 120) + 40;
+                obstacles.push({
+                    x: canvas.width,
+                    top: topHeight,
+                    bottom: canvas.height - topHeight - gap,
+                    width: 30,
+                    passed: false
+                });
+            }
+
+            // 障害物の移動・判定
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                let o = obstacles[i];
+                o.x -= (3.0 + score * 0.05);
+
+                // 衝突
+                if (player.x + player.radius > o.x && player.x - player.radius < o.x + o.width) {
+                    if (player.y - player.radius < o.top || player.y + player.radius > canvas.height - o.bottom) {
+                        triggerGameOver();
+                    }
+                }
+
+                // 通過スコア
+                if (!o.passed && o.x + o.width < player.x) {
+                    score += 5;
+                    o.passed = true;
+                }
+
+                if (o.x < -o.width) obstacles.splice(i, 1);
+            }
+        }
+    }
+
+    function draw() {
+        // 背景リセット
+        ctx.fillStyle = '#0d0d26';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // 背景にうっすらグリッド線を描画（サイバー感演出）
+        ctx.strokeStyle = 'rgba(0, 242, 254, 0.05)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < canvas.width; i += 40) {
+            ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
+        }
+        for (let i = 0; i < canvas.height; i += 40) {
+            ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke();
+        }
+
+        // 赤いレーザーゲート（障害物）
+        obstacles.forEach(o => {
+            ctx.fillStyle = '#ff0055';
+            ctx.shadowColor = '#ff0055';
+            ctx.shadowBlur = 10;
+            ctx.fillRect(o.x, 0, o.width, o.top);
+            ctx.fillRect(o.x, canvas.height - o.bottom, o.width, o.bottom);
+        });
+
+        // グリーンエナジーキューブ（ターゲット）
+        if (target.active) {
+            ctx.fillStyle = '#00ffcc';
+            ctx.shadowColor = '#00ffcc';
+            ctx.shadowBlur = 15;
+            ctx.save();
+            ctx.translate(target.x, target.y);
+            ctx.rotate(target.angle);
+            ctx.fillRect(-target.size / 2, -target.size / 2, target.size, target.size);
+            ctx.restore();
+        }
+
+        // プレイヤー（自機）
+        ctx.fillStyle = '#00f2fe';
+        ctx.shadowColor = '#00f2fe';
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // 内側のコア光
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, player.radius * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // シャドウ効果をリセット（描画負荷軽減のため）
+        ctx.shadowBlur = 0;
+
+        // UI表示
+        ctx.fillStyle = '#00f2fe';
+        ctx.font = 'bold 18px "Courier New"';
+        ctx.fillText(`SCORE: ${score}`, 20, 40);
+
+        if (gameState === 'START') {
+            ctx.fillStyle = 'rgba(10, 10, 22, 0.8)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#00f2fe';
+            ctx.font = 'bold 24px "Courier New"';
+            ctx.textAlign = 'center';
+            ctx.fillText('CYBER CUBE EVASION', canvas.width / 2, canvas.height / 2 - 30);
+            ctx.font = '14px "Courier New"';
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText('TAP TO INITIALIZE', canvas.width / 2, canvas.height / 2 + 20);
+            ctx.textAlign = 'left';
+        }
+
+        if (gameState === 'GAMEOVER') {
+            ctx.fillStyle = 'rgba(255, 0, 85, 0.2)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#ff0055';
+            ctx.font = 'bold 28px "Courier New"';
+            ctx.textAlign = 'center';
+            ctx.fillText('SYSTEM CRASHED', canvas.width / 2, canvas.height / 2 - 40);
+            ctx.font = 'bold 18px "Courier New"';
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(`FINAL DATA: ${score}`, canvas.width / 2, canvas.height / 2 + 10);
+            ctx.font = '14px "Courier New"';
+            ctx.fillStyle = '#00f2fe';
+            ctx.fillText('TAP TO REBOOT', canvas.width / 2, canvas.height / 2 + 60);
+            ctx.textAlign = 'left';
+        }
+    }
+
+    function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+    }
+
+    loop();
+</script>
+
+</body>
+</html>
