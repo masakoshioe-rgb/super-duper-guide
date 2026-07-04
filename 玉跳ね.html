@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>電脳ブロック崩し</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            touch-action: none;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background: #0a0a16;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: sans-serif;
+            overflow: hidden;
+            overscroll-behavior-y: contain;
+        }
+        #gameCanvas {
+            background: #0d0d26;
+            display: block;
+            box-shadow: 0 0 30px rgba(0, 242, 254, 0.3);
+            width: 100%;
+            max-width: 400px;
+            height: 100%;
+            max-height: 650px;
+            border: 2px solid #00f2fe;
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+        canvas.width = Math.min(window.innerWidth, 400);
+        canvas.height = Math.min(window.innerHeight, 650);
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    let gameState = 'START'; // START, PLAY, GAMEOVER, CLEAR
+    let score = 0;
+
+    // ボール設定
+    const ball = {
+        x: 200,
+        y: 350,
+        radius: 7,
+        dx: 3,
+        dy: -3,
+        speed: 4.5
+    };
+
+    // パドル設定
+    const paddle = {
+        width: 80,
+        height: 12,
+        x: 160,
+        y: 0
+    };
+
+    // ブロック設定
+    const blockConfig = {
+        rows: 5,
+        cols: 6,
+        height: 20,
+        padding: 6,
+        offsetTop: 80,
+        offsetLeft: 15
+    };
+    let blocks = [];
+
+    function triggerVibrate(pattern) {
+        if ('vibrate' in navigator) {
+            navigator.vibrate(pattern);
+        }
+    }
+
+    // ブロックの初期化
+    function initBlocks() {
+        blocks = [];
+        // 計算して画面幅に合わせる
+        const totalPadding = blockConfig.padding * (blockConfig.cols - 1);
+        const availableWidth = canvas.width - (blockConfig.offsetLeft * 2) - totalPadding;
+        blockConfig.width = availableWidth / blockConfig.cols;
+
+        for (let r = 0; r < blockConfig.rows; r++) {
+            blocks[r] = [];
+            for (let c = 0; c < blockConfig.cols; c++) {
+                blocks[r][c] = { x: 0, y: 0, status: 1 };
+            }
+        }
+    }
+
+    // 操作イベント
+    function handleTouch(e) {
+        e.preventDefault();
+        if (gameState === 'PLAY') {
+            const rect = canvas.getBoundingClientRect();
+            const touchX = e.touches[0].clientX - rect.left;
+            paddle.x = touchX - paddle.width / 2;
+            if (paddle.x < 0) paddle.x = 0;
+            if (paddle.x > canvas.width - paddle.width) paddle.x = canvas.width - paddle.width;
+        } else {
+            if (gameState === 'START' || gameState === 'GAMEOVER' || gameState === 'CLEAR') {
+                resetGame();
+                gameState = 'PLAY';
+                triggerVibrate(40);
+            }
+        }
+    }
+
+    window.addEventListener('touchstart', handleTouch, { passive: false });
+    window.addEventListener('touchmove', handleTouch, { passive: false });
+    window.addEventListener('mousemove', (e) => {
+        if (gameState !== 'PLAY') return;
+        const rect = canvas.getBoundingClientRect();
+        paddle.x = e.clientX - rect.left - paddle.width / 2;
+    });
+    window.addEventListener('mousedown', () => {
+        if (gameState === 'START' || gameState === 'GAMEOVER' || gameState === 'CLEAR') {
+            resetGame();
+            gameState = 'PLAY';
+        }
+    });
+
+    function resetGame() {
+        score = 0;
+        paddle.y = canvas.height - 60;
+        paddle.x = (canvas.width - paddle.width) / 2;
+        ball.x = canvas.width / 2;
+        ball.y = canvas.height - 100;
+        ball.speed = 4.5;
+        ball.dx = 3;
+        ball.dy = -3.5;
+        initBlocks();
+    }
+
+    // 衝突検知ロジック
+    function collisionDetection() {
+        let allDestroyed = true;
+        for (let r = 0; r < blockConfig.rows; r++) {
+            for (let c = 0; c < blockConfig.cols; c++) {
+                let b = blocks[r][c];
+                if (b.status === 1) {
+                    allDestroyed = false;
+                    // ボールがブロックの範囲内に入ったか判定
+                    if (ball.x + ball.radius > b.x && ball.x - ball.radius < b.x + blockConfig.width &&
+                        ball.y + ball.radius > b.y && ball.y - ball.radius < b.y + blockConfig.height) {
+                        
+                        ball.dy = -ball.dy;
+                        b.status = 0;
+                        score += 10;
+                        triggerVibrate(20); // ブロック破壊時に「プッ」と小刻みに振動
+                    }
+                }
+            }
+        }
+        if (allDestroyed && gameState === 'PLAY') {
+            gameState = 'CLEAR';
+            triggerVibrate([100, 50, 100]); // クリア時にタタンと振動
+        }
+    }
+
+    function update() {
+        if (gameState === 'PLAY') {
+            ball.x += ball.dx;
+            ball.y += ball.dy;
+
+            // 壁での跳ね返り
+            if (ball.x - ball.radius < 0 || ball.x + ball.radius > canvas.width) {
+                ball.dx = -ball.dx;
+                triggerVibrate(15);
+            }
+            if (ball.y - ball.radius < 0) {
+                ball.dy = -ball.dy;
+                triggerVibrate(15);
+            }
+
+            // パドルでの跳ね返り
+            if (ball.y + ball.radius >= paddle.y && ball.y - ball.radius <= paddle.y + paddle.height) {
+                if (ball.x >= paddle.x && ball.x <= paddle.x + paddle.width) {
+                    let hitPos = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
+                    ball.speed += 0.1; // 跳ね返すたびにわずかに加速
+                    ball.dx = hitPos * (ball.speed * 0.8);
+                    ball.dy = -Math.sqrt(ball.speed * ball.speed - ball.dx * ball.dx);
+                    ball.y = paddle.y - ball.radius;
+                    triggerVibrate(30);
+                }
+            }
+
+            // ブロックとの衝突判定
+            collisionDetection();
+
+            // 画面下に落下
+            if (ball.y > canvas.height) {
+                gameState = 'GAMEOVER';
+                triggerVibrate(300); // 失敗時は強めの長い振動
+            }
+        }
+    }
+
+    function draw() {
+        ctx.fillStyle = '#0d0d26';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // ブロックの描画
+        for (let r = 0; r < blockConfig.rows; r++) {
+            for (let c = 0; c < blockConfig.cols; c++) {
+                if (blocks[r][c].status === 1) {
+                    let blockX = (c * (blockConfig.width + blockConfig.padding)) + blockConfig.offsetLeft;
+                    let blockY = (r * (blockConfig.height + blockConfig.padding)) + blockConfig.offsetTop;
+                    blocks[r][c].x = blockX;
+                    blocks[r][c].y = blockY;
+
+                    // 行ごとに色を変えてネオン感を出す
+                    const colors = ['#ff0055', '#ff9900', '#00ffcc', '#00f2fe', '#9900ff'];
+                    ctx.fillStyle = colors[r % colors.length];
+                    ctx.fillRect(blockX, blockY, blockConfig.width, blockConfig.height);
+                }
+            }
+        }
+
+        // パドルとボール
+        if (gameState === 'PLAY') {
+            ctx.fillStyle = '#00f2fe';
+            ctx.fillRect(paddle.x, paddle.y, paddle.width, paddle.height);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // UI表示
+        ctx.fillStyle = '#00f2fe';
+        ctx.font = 'bold 18px sans-serif';
+        ctx.fillText(`得点: ${score}`, 20, 40);
+
+        // 各画面のテキスト
+        if (gameState === 'START') {
+            ctx.fillStyle = 'rgba(10, 10, 22, 0.9)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#00f2fe';
+            ctx.font = 'bold 24px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('電脳ブロック崩し', canvas.width / 2, canvas.height / 2 - 30);
+            ctx.font = '16px sans-serif';
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText('画面をタップして開始', canvas.width / 2, canvas.height / 2 + 20);
+            ctx.textAlign = 'left';
+        }
+
+        if (gameState === 'GAMEOVER') {
+            ctx.fillStyle = 'rgba(255, 0, 85, 0.2)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#ff0055';
+            ctx.font = 'bold 28px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('ゲーム終了', canvas.width / 2, canvas.height / 2 - 40);
+            ctx.font = '16px sans-serif';
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText('画面タップで再挑戦', canvas.width / 2, canvas.height / 2 + 20);
+            ctx.textAlign = 'left';
+        }
+
+        if (gameState === 'CLEAR') {
+            ctx.fillStyle = 'rgba(0, 255, 204, 0.2)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#00ffcc';
+            ctx.font = 'bold 32px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('作戦完了！', canvas.width / 2, canvas.height / 2 - 40);
+            ctx.font = '16px sans-serif';
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText('画面タップで次ステージへ', canvas.width / 2, canvas.height / 2 + 20);
+            ctx.textAlign = 'left';
+        }
+    }
+
+    function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+    }
+
+    paddle.y = canvas.height - 60;
+    initBlocks();
+    loop();
+</script>
+
+</body>
+</html>
