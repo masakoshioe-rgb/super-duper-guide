@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>0番出口 (Exit 0) - Ultra Stable</title>
+    <style>
+        /* 画面全体の基本設定 */
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background: #111; 
+            font-family: sans-serif; 
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        /* 3D空間の土台（CSS 3Dカメラの設定） */
+        #stage {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background: #222;
+            perspective: 400px; /* 奥行きの深さ */
+            perspective-origin: 50% 50%;
+            overflow: hidden;
+        }
+
+        /* 通路を構成する共通パーツ */
+        .wall {
+            position: absolute;
+            box-sizing: border-box;
+            border: 2px solid #555;
+        }
+
+        /* 床（下側） */
+        #floor {
+            bottom: 0; left: 0; width: 100%; height: 50vh;
+            background: linear-gradient(#333, #555);
+            transform-origin: bottom center;
+            transform: rotateX(75deg);
+        }
+
+        /* 天井（上側） */
+        #roof {
+            top: 0; left: 0; width: 100%; height: 50vh;
+            background: linear-gradient(#666, #333);
+            transform-origin: top center;
+            transform: rotateX(-75deg);
+        }
+
+        /* 左壁 */
+        #left-wall {
+            top: 0; left: 0; width: 50vw; height: 100%;
+            background: linear-gradient(90deg, #aaa, #444);
+            transform-origin: left center;
+            transform: rotateY(75deg);
+        }
+
+        /* 右壁 */
+        #right-wall {
+            top: 0; right: 0; width: 50vw; height: 100%;
+            background: linear-gradient(-90deg, #999, #444);
+            transform-origin: right center;
+            transform: rotateY(-75deg);
+        }
+
+        /* 奥の通路（無限に続く突き当たり） */
+        #tunnel-end {
+            position: absolute;
+            top: 35vh; left: 35vw; width: 30vw; height: 30vh;
+            background: #111;
+            box-shadow: 0 0 20px rgba(0,0,0,1) inset;
+        }
+
+        /* 中央の緑色の案内標識 */
+        #sign {
+            position: absolute;
+            top: 30vh; left: 40vw; width: 20vw; height: 6vh;
+            background: #006633;
+            border: 2px solid #fff;
+            color: #fff;
+            font-size: 3vw;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+
+        /* 【重要】右壁に貼り付くポスター（異変の対象） */
+        #poster {
+            position: absolute;
+            top: 40vh;
+            right: 15vw;
+            width: 8vw;
+            height: 15vh;
+            background: #aa0000; /* 通常は赤 */
+            border: 1px solid #fff;
+            transform: rotateY(-45deg); /* 壁の傾きに合わせる */
+            transition: all 0.2s ease;
+        }
+
+        /* UI（ボタンと上部テキスト） */
+        #info { 
+            position: absolute; top: 30px; left: 0; width: 100%;
+            text-align: center; color: #fff; font-size: 28px; font-weight: bold; 
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.9); z-index: 10; 
+        }
+        #ui { 
+            position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); 
+            display: flex; gap: 15px; z-index: 10; width: 90%; max-width: 400px;
+        }
+        button { 
+            flex: 1; padding: 20px 10px; font-size: 16px; font-weight: bold; 
+            cursor: pointer; border: none; border-radius: 10px; 
+            background: rgba(255, 255, 255, 0.95); box-shadow: 0 6px 12px rgba(0,0,0,0.6); 
+            -webkit-tap-highlight-color: transparent; 
+        }
+        button:active { background: #bbb; }
+    </style>
+</head>
+<body>
+
+    <!-- ゲーム画面（3Dステージ） -->
+    <div id="stage">
+        <div id="floor" class="wall"></div>
+        <div id="roof" class="wall"></div>
+        <div id="left-wall" class="wall"></div>
+        <div id="right-wall" class="wall"></div>
+        <div id="tunnel-end"></div>
+        
+        <!-- オブジェクト -->
+        <div id="sign">出口 8 ▶</div>
+        <div id="poster"></div>
+    </div>
+
+    <!-- UIエリア -->
+    <div id="info">出口 0</div>
+    <div id="ui">
+        <button ontouchstart="chooseAction('back')" onclick="if(!('ontouchstart' in window)) chooseAction('back')">◀ 戻る<br>(異変あり)</button>
+        <button ontouchstart="chooseAction('forward')" onclick="if(!('ontouchstart' in window)) chooseAction('forward')">進む ▶<br>(異変なし)</button>
+    </div>
+
+    <script>
+        let currentExit = 0;
+        let hasAnomaly = false;
+
+        const posterEl = document.getElementById('poster');
+        const infoEl = document.getElementById('info');
+
+        // --- 毎ターンの異変抽選 ---
+        function initTurn() {
+            // 50%の確率で異変が発生
+            hasAnomaly = Math.random() < 0.5;
+
+            if (hasAnomaly) {
+                // 【異変時】ポスターが巨大な「真っ黒い影」に変化
+                posterEl.style.background = '#000000';
+                posterEl.style.width = '16vw';
+                posterEl.style.height = '30vh';
+                posterEl.style.top = '30vh';
+            } else {
+                // 【通常時】普通の赤いポスター
+                posterEl.style.background = '#aa0000';
+                posterEl.style.width = '8vw';
+                posterEl.style.height = '15vh';
+                posterEl.style.top = '40vh';
+            }
+
+            infoEl.innerText = `出口 ${currentExit}`;
+        }
+
+        // --- プレイヤーの選択処理（連打防止） ---
+        let isProcessing = false;
+        function chooseAction(action) {
+            if (isProcessing) return;
+            isProcessing = true;
+
+            // 正解判定
+            let isCorrect = (hasAnomaly && action === 'back') || (!hasAnomaly && action === 'forward');
+
+            // Chromeのアラート停止バグを防ぐため、少し遅延させて通知
+            setTimeout(() => {
+                if (isCorrect) {
+                    currentExit++;
+                    if (currentExit >= 8) {
+                        alert("🎉 脱出成功！\nおめでとうございます。8番出口に到達しました！");
+                        currentExit = 0;
+                    }
+                } else {
+                    alert("👁 違和感に気づいたか？\n（出口 0 に戻されました）");
+                    currentExit = 0;
+                }
+                initTurn();
+                isProcessing = false;
+            }, 50);
+        }
+
+        // 初回スタート
+        initTurn();
+    </script>
+</body>
+</html>
