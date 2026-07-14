@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <!-- スマホ向けの表示最適化（ピンチイン・アウトの禁止） -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>0番出口 (Exit 0) - Mobile</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background: #000; 
+            font-family: sans-serif; 
+            user-select: none;
+            -webkit-user-select: none; /* iOS/Safari用 */
+            touch-action: manipulation; /* ダブルタップズームの防止 */
+        }
+        /* UIをスマホ向けに拡大・調整 */
+        #ui { 
+            position: absolute; 
+            bottom: 40px; 
+            left: 50%; 
+            transform: translateX(-50%); 
+            display: flex; 
+            gap: 15px; 
+            z-index: 10; 
+            width: 90%;
+            max-width: 400px;
+        }
+        button { 
+            flex: 1;
+            padding: 20px 10px; 
+            font-size: 16px; 
+            font-weight: bold; 
+            cursor: pointer; 
+            border: none; 
+            border-radius: 10px; 
+            background: rgba(255, 255, 255, 0.9); 
+            box-shadow: 0 6px 12px rgba(0,0,0,0.5); 
+            transition: 0.1s;
+            /* スマホのタップ時ハイライトを消す */
+            -webkit-tap-highlight-color: transparent; 
+        }
+        button:active { 
+            background: #bbb; 
+            transform: scale(0.95);
+        }
+        #info { 
+            position: absolute; 
+            top: 30px; 
+            left: 0; 
+            width: 100%;
+            text-align: center;
+            color: #fff; 
+            font-size: 28px; 
+            font-weight: bold; 
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8); 
+            z-index: 10; 
+            pointer-events: none;
+        }
+    </style>
+    <!-- Three.js の読み込み -->
+    <script src="https://cloudflare.com"></script>
+</head>
+<body>
+
+    <div id="info">出口 0</div>
+    <div id="ui">
+        <!-- スマホでの反応速度を上げるため、onclick ではなく touchstart を併用 -->
+        <button onget="return false;" ontouchstart="chooseAction('back')" onclick="if(!('ontouchstart' in window)) chooseAction('back')">◀ 戻る<br>(異変あり)</button>
+        <button onget="return false;" ontouchstart="chooseAction('forward')" onclick="if(!('ontouchstart' in window)) chooseAction('forward')">進む ▶<br>(異変なし)</button>
+    </div>
+
+    <script>
+        let currentExit = 0;
+        let hasAnomaly = false;
+
+        // --- Three.js 基本設定 ---
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x111111, 0.06);
+
+        // スマホの縦画面を考慮して視野角(FOV)を85度に広げて見やすく調整
+        const camera = new THREE.PerspectiveCamera(85, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // スマホの解像度荒れ対策
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // --- ライト配置 ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.25);
+        scene.add(ambientLight);
+
+        const pointLight = new THREE.PointLight(0xffeedd, 1, 30);
+        pointLight.position.set(0, 3.5, 0);
+        pointLight.castShadow = true;
+        scene.add(pointLight);
+
+        // --- 通路の作成 ---
+        const floorGeo = new THREE.PlaneGeometry(10, 40);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.5 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        const roofGeo = new THREE.PlaneGeometry(10, 40);
+        const roofMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.8 });
+        const roof = new THREE.Mesh(roofGeo, roofMat);
+        roof.rotation.x = Math.PI / 2;
+        roof.position.y = 4;
+        scene.add(roof);
+
+        // 縦画面でもポスターが見えやすいように壁の幅（距離）を少し狭めて調整
+        const leftWallGeo = new THREE.PlaneGeometry(40, 4);
+        const leftWallMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.7 });
+        const leftWall = new THREE.Mesh(leftWallGeo, leftWallMat);
+        leftWall.rotation.y = Math.PI / 2;
+        leftWall.position.set(-4, 2, 0); // 5から4に変更
+        scene.add(leftWall);
+
+        const rightWallGeo = new THREE.PlaneGeometry(40, 4);
+        const rightWallMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.7 });
+        const rightWall = new THREE.Mesh(rightWallGeo, rightWallMat);
+        rightWall.rotation.y = -Math.PI / 2;
+        rightWall.position.set(4, 2, 0); // -5から-4に変更
+        scene.add(rightWall);
+
+        // --- 看板・ポスター ---
+        const signGeo = new THREE.BoxGeometry(2.5, 0.6, 0.1);
+        const signMat = new THREE.MeshStandardMaterial({ color: 0x006633 });
+        const sign = new THREE.Mesh(signGeo, signMat);
+        sign.position.set(0, 3, -12);
+        scene.add(sign);
+
+        const posterGeo = new THREE.PlaneGeometry(1.5, 2.2);
+        const posterMat = new THREE.MeshStandardMaterial({ color: 0xaa0000 });
+        const poster = new THREE.Mesh(posterGeo, posterMat);
+        poster.position.set(3.9, 1.8, -1); // 壁に合わせて位置を微調整
+        poster.rotation.y = -Math.PI / 2;
+        scene.add(poster);
+
+        // --- カメラ初期位置 ---
+        camera.position.set(0, 2, 6);
+
+        // --- ゲームループ初期化 ---
+        function initTurn() {
+            hasAnomaly = Math.random() < 0.5;
+
+            if (hasAnomaly) {
+                // 【異変】ポスターが巨大化して真っ黒になる
+                poster.scale.set(1.8, 1.8, 1);
+                poster.material.color.setHex(0x000000);
+            } else {
+                // 【通常】元に戻る
+                poster.scale.set(1, 1, 1);
+                poster.material.color.setHex(0xaa0000);
+            }
+
+            document.getElementById('info').innerText = `出口 ${currentExit}`;
+        }
+
+        // --- アクション選択（連打防止フラグ付き） ---
+        let isProcessing = false;
+        function chooseAction(action) {
+            if (isProcessing) return;
+            isProcessing = true;
+
+            let isCorrect = (hasAnomaly && action === 'back') || (!hasAnomaly && action === 'forward');
+
+            // スマホのAlertによる挙動不審を防ぐため、少しだけ遅延を入れてポップアップを表示
+            setTimeout(() => {
+                if (isCorrect) {
+                    currentExit++;
+                    if (currentExit >= 8) {
+                        alert("🎉 おめでとうございます！8番出口から脱出しました！");
+                        currentExit = 0;
+                    }
+                } else {
+                    alert("👁 何かがおかしい…\n（出口 0 に戻されました）");
+                    currentExit = 0;
+                }
+                initTurn();
+                isProcessing = false;
+            }, 50);
+        }
+
+        // --- 画面リサイズ・画面回転対応 ---
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- アニメーションループ ---
+        function animate() {
+            requestAnimationFrame(animate);
+            // スマホでも酔いにくいレベルの微小なカメラの揺れ（呼吸）
+            camera.position.y = 2 + Math.sin(Date.now() * 0.0015) * 0.015;
+            renderer.render(scene, camera);
+        }
+
+        // 開始
+        initTurn();
+        animate();
+    </script>
+</body>
+</html>
