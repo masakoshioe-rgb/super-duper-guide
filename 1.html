@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>SPACE SHOOTER v1.8.1</title>
+    <!-- CSSファイルを読み込む -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- ゲーム画面エリア -->
+    <div id="gameContainer">
+        <div id="homeScreen">
+            <div class="game-title">SPACE SHOOTER</div>
+            <button class="start-btn" id="startBtn">GAME START</button>
+        </div>
+        <button id="pauseBtn">PAUSE</button>
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <!-- ショップ・UIエリア -->
+    <div id="uiArea">
+        <div class="info-row">
+            <span id="coinText">COIN: 0</span>
+            <span id="hiScoreText">HI-SCORE: 0</span>
+        </div>
+        <div class="shop-row">
+            <button class="shop-btn" id="buyFireRate">連射 UP<br><span id="costFire">Cost: 50</span></button>
+            <button class="shop-btn" id="buySpeed">移動 UP<br><span id="costSpeed">Cost: 40</span></button>
+        </div>
+        <div class="footer-row">
+            <span class="version-tag">Android Browser Ver 1.8.1</span>
+            <button class="reset-btn" id="resetBtn">データ消去</button>
+        </div>
+    </div>
+
+    <!-- JavaScriptファイルを読み込む -->
+    <script src="game.js"></script>
+</body>
+</html>
