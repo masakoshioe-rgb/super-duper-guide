@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CYBER BEAT -リズムゲーム-</title>
+    <style>
+        /* ==========================================
+           🎨 CSS: デザイン（ゲームセンター風）
+           ========================================== */
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #050508;
+            color: #ffffff;
+            font-family: 'Impact', 'Arial Black', sans-serif;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* スコアやコンボの表示エリア */
+        .info {
+            margin-top: 25px;
+            text-align: center;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 10px 30px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(5px);
+        }
+
+        #score {
+            font-size: 28px;
+            color: #00ffff;
+            text-shadow: 0 0 10px #00ffff;
+        }
+
+        #combo {
+            font-size: 36px;
+            color: #ffff00;
+            height: 45px;
+            margin-top: 5px;
+            text-shadow: 0 0 15px #ffff00, 0 0 30px #ffaa00;
+        }
+
+        #judge-text {
+            font-size: 40px;
+            font-weight: bold;
+            height: 50px;
+            margin-top: 5px;
+            letter-spacing: 2px;
+            text-shadow: 0 0 20px currentColor, 0 0 40px currentColor;
+        }
+
+        /* ゲームのレーン */
+        .game-container {
+            position: relative;
+            width: 90%;
+            max-width: 380px;
+            flex: 1;
+            margin-bottom: 20px;
+            background: linear-gradient(180deg, rgba(10,10,15,1) 0%, rgba(20,20,35,1) 100%);
+            border-left: 3px solid #00ffff;
+            border-right: 3px solid #00ffff;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.2), inset 0 0 20px rgba(0, 255, 255, 0.1);
+            border-radius: 5px;
+        }
+
+        /* レーザー風ノーツ */
+        .note {
+            position: absolute;
+            left: 8%;
+            width: 84%;
+            height: 16px;
+            background: linear-gradient(90deg, #00ffff 0%, #00ff66 50%, #00ffff 100%);
+            border-radius: 8px;
+            box-shadow: 0 0 15px #00ffff, 0 0 30px #00ff66;
+        }
+
+        /* 判定ライン */
+        .judge-line {
+            position: absolute;
+            bottom: 120px;
+            left: 0;
+            width: 100%;
+            height: 6px;
+            background: linear-gradient(90deg, transparent 0%, #ff007f 50%, transparent 100%);
+            box-shadow: 0 0 15px #ff007f, 0 0 30px #ff007f;
+        }
+
+        /* スマホ用タップエリア */
+        .tap-zone {
+            position: absolute;
+            bottom: 15px;
+            left: 5%;
+            width: 90%;
+            height: 90px;
+            background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%);
+            border: 2px solid #ff007f;
+            border-radius: 15px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 22px;
+            letter-spacing: 4px;
+            color: #ff007f;
+            text-shadow: 0 0 10px #ff007f;
+            transition: all 0.1s ease;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+
+        /* タップ時の発光エフェクト */
+        .tap-zone:active {
+            background: linear-gradient(180deg, rgba(0,255,255,0.2) 0%, rgba(0,255,255,0.05) 100%);
+            border-color: #00ffff;
+            color: #00ffff;
+            text-shadow: 0 0 15px #00ffff;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.4);
+            transform: scale(0.98);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 画面上部の情報表示 -->
+    <div class="info">
+        <div>SCORE: <span id="score">0</span></div>
+        <div id="combo"></div>
+        <div id="judge-text"></div>
+    </div>
+
+    <!-- ゲームのプレイエリア -->
+    <div class="game-container" id="lane">
+        <div class="judge-line"></div>
+        <div class="tap-zone" id="tapZone">TAP BEAT!</div>
+    </div>
+
+    <!-- ==========================================
+       🤖 JavaScript: ゲームの仕組み・動かす処理
+       ========================================== -->
+    <script>
+        const lane = document.getElementById('lane');
+        const tapZone = document.getElementById('tapZone');
+        const scoreDisplay = document.getElementById('score');
+        const comboDisplay = document.getElementById('combo');
+        const judgeDisplay = document.getElementById('judge-text');
+
+        let score = 0;
+        let combo = 0;
+        let notes = []; 
+
+        const judgeLineBottom = 120; // 判定ラインの下からの位置（CSSと合わせています）
+
+        // ノーツを定期的に生成（1.2秒ごと）
+        setInterval(() => {
+            createNote();
+        }, 1200);
+
+        function createNote() {
+            const note = document.createElement('div');
+            note.className = 'note';
+            note.style.top = '0px';
+            lane.appendChild(note);
+
+            const noteObj = {
+                element: note,
+                y: 0,
+                speed: 6 // 落ちる速度（数字を大きくすると速くなります）
+            };
+            notes.push(noteObj);
+        }
+
+        // ゲームのメインループ（落下処理）
+        function update() {
+            const currentContainerHeight = lane.clientHeight;
+
+            for (let i = notes.length - 1; i >= 0; i--) {
+                let note = notes[i];
+                note.y += note.speed;
+                note.element.style.top = note.y + 'px';
+
+                // 判定ラインを通り過ぎて画面外にいったらMISS
+                if (note.y > currentContainerHeight - 80) {
+                    note.element.remove();
+                    notes.splice(i, 1);
+                    showJudge('MISS', '#ff4757');
+                    combo = 0;
+                    comboDisplay.textContent = '';
+                }
+            }
+            requestAnimationFrame(update);
+        }
+        requestAnimationFrame(update);
+
+        // タップしたときの判定
+        function handleTap(e) {
+            e.preventDefault(); 
+            
+            if (notes.length === 0) return;
+
+            const currentContainerHeight = lane.clientHeight;
+            // 理想のタップ位置（判定ラインにノーツがぴったり重なるY座標）
+            const targetY = currentContainerHeight - judgeLineBottom - 16; 
+
+            let nearestNote = notes[0];
+            let diff = Math.abs(nearestNote.y - targetY);
+
+            if (diff < 65) { 
+                if (diff <= 15) {
+                    score += 100;
+                    combo++;
+                    showJudge('PERFECT!!', '#00ffcc');
+                } else if (diff <= 38) {
+                    score += 50;
+                    combo++;
+                    showJudge('GREAT', '#ffca28');
+                } else {
+                    score += 10;
+                    combo = 0;
+                    showJudge('GOOD', '#ffffff');
+                }
+
+                scoreDisplay.textContent = score;
+                comboDisplay.textContent = combo > 1 ? combo + ' COMBO' : '';
+
+                nearestNote.element.remove();
+                notes.shift();
+            }
+        }
+
+        function showJudge(text, color) {
+            judgeDisplay.textContent = text;
+            judgeDisplay.style.color = color;
+        }
+
+        // スマホのタッチとPCのクリックの両方に対応
+        tapZone.addEventListener('touchstart', handleTap);
+        tapZone.addEventListener('mousedown', handleTap);
+    </script>
+</body>
+</html>
